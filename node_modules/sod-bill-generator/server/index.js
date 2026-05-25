@@ -402,6 +402,25 @@ function buildPlaceholders(params) {
   return ph;
 }
 
+// ─── DOCX to PDF conversion helper ────────────────────────────────────────
+// Requires: npm install libreoffice-convert
+// Also requires LibreOffice to be installed on the server:
+//   Ubuntu/Debian: sudo apt-get install libreoffice
+//   macOS:         brew install --cask libreoffice
+async function convertDocxToPdf(docxBuffer) {
+  const libre = (await import('libreoffice-convert')).default;
+
+  return new Promise((resolve, reject) => {
+    libre.convert(docxBuffer, '.pdf', undefined, (err, pdfBuffer) => {
+      if (err) {
+        reject(new Error(`LibreOffice PDF conversion failed: ${err.message}`));
+      } else {
+        resolve(pdfBuffer);
+      }
+    });
+  });
+}
+
 // ─── API Endpoints ────────────────────────────────────────────────────────
 
 // Generate schedules only
@@ -463,7 +482,7 @@ app.post('/api/generate-schedule', (req, res) => {
   }
 });
 
-// Generate DOCX bills
+// Generate PDF bills (converted from DOCX internally)
 app.post('/api/generate-bills', async (req, res) => {
   try {
     const {
@@ -556,9 +575,12 @@ app.post('/api/generate-bills', async (req, res) => {
 
       doc.render(placeholders);
 
-      const buffer = doc
+      const docxBuffer = doc
         .getZip()
         .generate({ type: 'nodebuffer' });
+
+      // Convert the rendered DOCX buffer to PDF
+      const pdfBuffer = await convertDocxToPdf(docxBuffer);
 
       const monthName = MONTH_NAMES[monthNumber - 1];
 
@@ -566,11 +588,12 @@ app.post('/api/generate-bills', async (req, res) => {
 
       const safeSup = sup.name.replace(/\s+/g, '_');
 
-      const filename = `SoD_Bill_${safeName}_${safeSup}_${monthName}_${year}.docx`;
+      // Filename is now .pdf instead of .docx
+      const filename = `SoD_Bill_${safeName}_${safeSup}_${monthName}_${year}.pdf`;
 
       bills.push({
         filename,
-        buffer: buffer.toString('base64'),
+        buffer: pdfBuffer.toString('base64'),
         supervisor: sup.name,
         placeholders,
       });
