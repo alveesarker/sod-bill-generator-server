@@ -408,17 +408,24 @@ function buildPlaceholders(params) {
 //   Ubuntu/Debian: sudo apt-get install libreoffice
 //   macOS:         brew install --cask libreoffice
 async function convertDocxToPdf(docxBuffer) {
-  const libre = (await import('libreoffice-convert')).default;
+  const FormData = (await import('form-data')).default;
+  const fetch = (await import('node-fetch')).default;
 
-  return new Promise((resolve, reject) => {
-    libre.convert(docxBuffer, '.pdf', undefined, (err, pdfBuffer) => {
-      if (err) {
-        reject(new Error(`LibreOffice PDF conversion failed: ${err.message}`));
-      } else {
-        resolve(pdfBuffer);
-      }
-    });
+  const form = new FormData();
+  form.append('file', docxBuffer, { filename: 'bill.docx' });
+  form.append('to', 'pdf');
+
+  const res = await fetch('https://api.cloudconvert.com/v2/convert', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.CLOUDCONVERT_API_KEY}`,
+      ...form.getHeaders(),
+    },
+    body: form,
   });
+
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // ─── API Endpoints ────────────────────────────────────────────────────────
