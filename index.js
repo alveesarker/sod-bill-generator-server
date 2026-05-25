@@ -402,28 +402,6 @@ function buildPlaceholders(params) {
   return ph;
 }
 
-// ─── DOCX to PDF conversion helper ────────────────────────────────────────
-// Requires: npm install libreoffice-convert
-// Also requires LibreOffice to be installed on the server:
-//   Ubuntu/Debian: sudo apt-get install libreoffice
-//   macOS:         brew install --cask libreoffice
-async function convertDocxToPdf(docxBuffer) {
-  const form = new FormData();
-  form.append('file', new Blob([docxBuffer]), 'bill.docx');
-  form.append('to', 'pdf');
-
-  const res = await fetch('https://api.cloudconvert.com/v2/convert', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer YOUR_CLOUDCONVERT_API_KEY_HERE`,
-    },
-    body: form,
-  });
-
-  const arrayBuffer = await res.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-}
-
 // ─── API Endpoints ────────────────────────────────────────────────────────
 
 // Generate schedules only
@@ -485,7 +463,7 @@ app.post('/api/generate-schedule', (req, res) => {
   }
 });
 
-// Generate PDF bills (converted from DOCX internally)
+// Generate DOCX bills
 app.post('/api/generate-bills', async (req, res) => {
   try {
     const {
@@ -578,12 +556,9 @@ app.post('/api/generate-bills', async (req, res) => {
 
       doc.render(placeholders);
 
-      const docxBuffer = doc
+      const buffer = doc
         .getZip()
         .generate({ type: 'nodebuffer' });
-
-      // Convert the rendered DOCX buffer to PDF
-      const pdfBuffer = await convertDocxToPdf(docxBuffer);
 
       const monthName = MONTH_NAMES[monthNumber - 1];
 
@@ -591,12 +566,11 @@ app.post('/api/generate-bills', async (req, res) => {
 
       const safeSup = sup.name.replace(/\s+/g, '_');
 
-      // Filename is now .pdf instead of .docx
-      const filename = `SoD_Bill_${safeName}_${safeSup}_${monthName}_${year}.pdf`;
+      const filename = `SoD_Bill_${safeName}_${safeSup}_${monthName}_${year}.docx`;
 
       bills.push({
         filename,
-        buffer: pdfBuffer.toString('base64'),
+        buffer: buffer.toString('base64'),
         supervisor: sup.name,
         placeholders,
       });
